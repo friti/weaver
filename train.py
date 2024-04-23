@@ -8,8 +8,11 @@ import argparse
 import functools
 import numpy as np
 import math
-import torch
 
+from comet_ml import Experiment
+from comet_ml.integration.pytorch import log_model
+
+import torch
 from torch.utils.data import DataLoader
 from importlib import import_module
 import ast
@@ -127,7 +130,7 @@ parser.add_argument('--profile', action='store_true', default=False,
                     help='run the profiler')
 parser.add_argument('--backend', type=str, choices=['gloo', 'nccl', 'mpi'], default=None,
                     help='backend for distributed training')
-
+parser.add_argument('--comet', type=str, default='not_important1')
 
 def to_filelist(args, mode='train'):
     if mode == 'train':
@@ -724,6 +727,16 @@ def main(args):
     if training_mode:
         model = orig_model.to(dev)
 
+        print("Here we start with Comet (only training)")
+        experiment = Experiment(
+            api_key="1vKWaK0rH2v2QrICMYsJECH9V",
+            project_name="particlenet",
+            workspace="friti",
+            auto_output_logging = "simple"
+        )
+
+        experiment.set_name(args.comet)
+
         # DistributedDataParallel
         if args.backend is not None:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -786,7 +799,8 @@ def main(args):
                     torch.save(model, args.model_prefix + '_best_epoch_full.pt')
             _logger.info('Epoch #%d: Current validation metric: %.5f (best: %.5f)' %
                          (epoch, valid_metric, best_valid_metric), color='bold')
-
+            experiment.log_metric("batch_accuracy_train", valid_metric)
+            
     if args.data_test:
         if args.backend is not None and local_rank != 0:
             return
